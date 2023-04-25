@@ -1,7 +1,7 @@
 /*
     ISC License
     
-    Copyright (c) 2022, aiden (aiden@cmp.bz)
+    Copyright (c) 2023, aiden (aiden@cmp.bz)
     
     Permission to use, copy, modify, and/or distribute this software for any
     purpose with or without fee is hereby granted, provided that the above
@@ -15,36 +15,66 @@
     ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
-function scdl() {
-    if (typeof scdl.c == "undefined") {
-        scdl.c = 0n;
-    }
-    let key = "scdl" + Math.floor(Math.random() * 0x100000000).toString(0x10).padStart(8, "0") + scdl.c++;
-    let fuck = true;
-    webpackJsonp.push([[], { [key]: function (_, __, r) {
-        if (fuck) {
-            fuck = false;
-            return;
+if (!window.get_r) {
+    window.get_r = function get_r() {
+        if (get_r.cache) {
+            return get_r.cache[1];
         }
-        for (let idx = 0; typeof scdl.f == "undefined"; ++idx) {
-            let obj = r(idx);
-            if ("getCurrentSound" in obj) {
-                scdl.f = obj;
+        get_r.cache = [];
+        webpackJsonp.push([[], {
+            get_r(_, __, r) {
+                get_r.cache.push(r);
             }
+        }, [["get_r"]]]);
+        return get_r.cache[1];
+    }
+}
+function scdl() {
+    function find(...functions) {
+        functions = new Set(functions);
+        let r = get_r();
+        let v = {};
+        let max = webpackJsonp.flat(Infinity).length;
+        for (let idx = 0; idx < max; ++idx) {
+            try {
+                let obj = r(idx);
+                for (let fn of functions) {
+                    let p = fn(obj);
+                    if (p) {
+                        v = { ...v, ...p };
+                        functions.delete(fn);
+                        if (functions.size == 0) {
+                            return v;
+                        }
+                    }
+                }
+            } catch {}
         }
-        let player = scdl.f.getCurrentSound().player.player._player._controllerManager._cacheManager._players.find(e => e._playlistSegmentRetriever != null);
-        if (!player) {
-            return alert("Play a song.");
-        }
-        let segments = player._playlistSegmentRetriever._segments;
-        if (player._playlist._data.segments.length != segments.length) {
-            return alert("Song not fully downloaded yet.");
-        }
-        let u8_arrays = [];
-        for (let idx = 0; idx < segments.length; ++idx) {
-            u8_arrays.push(segments[idx].dataRetrieveJob._jobControl.progressUpdates.getProgressSoFar().data);
-        }
-        alert("issa " + player._transmuxerAndMimeType.mimeType);
-        location = URL.createObjectURL(new Blob(u8_arrays, { type: "application/octet-stream" }));
-    } }, [[key]]]);
+        return null;
+    }
+    if (!scdl.cache) {
+        scdl.cache = find(
+            function (obj) {
+                if (obj.getCurrentSound) {
+                    return { getCurrentSound: obj.getCurrentSound };
+                }
+            }
+        );
+    }
+    let curr = scdl.cache.getCurrentSound();
+    let streamUrlRetriever = curr.player.player._player._controllerManager._streamUrlRetriever;
+    streamUrlRetriever._retrieveStreamUrl(
+        streamUrlRetriever._mediaPayload.transcodings.find(p =>
+            p.format.protocol == "progressive"
+        ).url
+    ).onCompletion(async url => {
+        let blobURL = URL.createObjectURL(new Blob(
+            [await fetch(url).then(p => p.arrayBuffer())],
+            { type: "application/octet-stream", }
+        ));
+        let anchor = document.createElement("a");
+        anchor.download = curr.attributes.permalink + ".mp3";
+        anchor.href = blobURL;
+        anchor.click();
+    });
 }
